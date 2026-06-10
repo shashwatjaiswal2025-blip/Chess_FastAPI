@@ -15,10 +15,22 @@ POSTGRES_DB = os.getenv("POSTGRES_DB", "chessdb")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
 
-POSTGRES_URL = os.getenv(
-    "DATABASE_URL"
-) or os.getenv("Database_URL") or (
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+def _normalize_database_url(url: str) -> str:
+    if url.startswith("postgresspostgresql://"):
+        return url.replace("postgresspostgresql://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
+POSTGRES_URL = _normalize_database_url(
+    os.getenv("DATABASE_URL")
+    or os.getenv("Database_URL")
+    or (
+        f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    )
 )
 
 engine = create_async_engine(POSTGRES_URL, echo=False)
