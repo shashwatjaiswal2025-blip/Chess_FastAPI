@@ -19,7 +19,6 @@ class legalmovesout(BaseModel):
     legal_moves: list[str]
 
 class legalmovesin(BaseModel):
-    game_id: int
     piece: str
     position: str
 

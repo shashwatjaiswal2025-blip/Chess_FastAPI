@@ -30,7 +30,8 @@ async def create_new_game(db: AsyncSession = Depends(get_db),usercred: userout= 
     active_game = result.scalar_one_or_none()
     if active_game:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You are already in an active game")
-
+        
+    
     # Check if user is already in the waiting list
     stmt = select(waiting_player).where(waiting_player.user_id == usercred.id)
     result = await db.execute(stmt)
