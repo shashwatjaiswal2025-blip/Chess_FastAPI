@@ -4,8 +4,9 @@ import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import lifespan
-from Router import login, game
+from app.Router import game
+from app.database.database import lifespan
+from app.Router import login
 
 
 

@@ -3,10 +3,10 @@ from datetime import datetime, timedelta, timezone
 from jwt.exceptions import PyJWTError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from database import get_db, User
+from app.database.database import get_db, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from schemas import TokenData, userOut, Token
+from app.schemas.schemas import TokenData, userOut, Token
 
 
 SECRET_KEY = "Hello"

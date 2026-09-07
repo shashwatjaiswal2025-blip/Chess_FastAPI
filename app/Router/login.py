@@ -3,9 +3,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
-from database import get_db, User
-from schemas import Token, usercreate, userOut
-from authentication import create_access_token
+from app.database.database import get_db, User
+from app.schemas.schemas import Token, usercreate, userOut
+from app.authentication.authentication import create_access_token
 
 
 

@@ -8,6 +8,7 @@ class game_board(BaseModel):
     white_time: int
     black_time: int
     team_turn: int
+    board_state: str
     winner: Optional[int] = None
     
 class game_move(BaseModel):

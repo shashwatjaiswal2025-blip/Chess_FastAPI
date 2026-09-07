@@ -11,9 +11,9 @@ K= king
 piece = (row,col)
 board[row][col] = (piece, team)
 '''
-from schemas import legalmovesin
+from app.schemas.schemas import legalmovesin
 import chess
-from database import Game, Active_Game
+from app.database.database import Game, Active_Game
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
 

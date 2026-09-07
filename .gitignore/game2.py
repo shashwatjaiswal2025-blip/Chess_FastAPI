@@ -1,13 +1,13 @@
 
 from typing import Optional
-from authentication import current_user
+from app.authentication.authentication import current_user
 from fastapi import APIRouter, Response, status, HTTPException, Depends
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from database import Active_Game, User, get_db,Game,waiting_player
-from schemas import userOut as userout,legalmovesin
-from moves import get_legal_moves as calculate_legal_moves,checks_mate,active_to_Game,timecheck,time_update
+from app.database.database import Active_Game, User, get_db,Game,waiting_player
+from app.schemas.schemas import userOut as userout,legalmovesin
+from app.game.moves import get_legal_moves as calculate_legal_moves,checks_mate,active_to_Game,timecheck,time_update
 import chess
 
 router = APIRouter(prefix="/game", tags=["game"])
@@ -18,6 +18,7 @@ async def time_update_and_check(game, db):
         winner = game.black_player_id if game.time_left_white <= 0 else game.white_player_id
         await active_to_Game(game, winner, db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Time's up! Player {winner} wins.")
+
 
 @router.get("/new")
 async def create_new_game(db: AsyncSession = Depends(get_db),usercred: userout= Depends(current_user)):
@@ -184,17 +185,3 @@ async def make_move(game_id: int, move: str, usercred: userout = Depends(current
         await active_to_Game(game, game.black_player_id, db)
         return {"message": "Checkmate! Black wins!"}
     return {"message": "Move accepted", "board_state": game.board_state}
-
-
-    
-
-
-
-
-
-
-    
-
-
-
-
