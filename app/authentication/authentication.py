@@ -1,7 +1,8 @@
 import jwt
+import os
 from datetime import datetime, timedelta, timezone
 from jwt.exceptions import PyJWTError
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, WebSocket, status
 from fastapi.security import OAuth2PasswordBearer
 from app.database.database import get_db, User
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from app.schemas.schemas import TokenData, userOut, Token
 
 
-SECRET_KEY = "Hello"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "development-secret-key-change-me-32")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -48,6 +49,26 @@ async def current_user(token: str = Depends(oauth2_scheme), session: AsyncSessio
     user = result.scalars().first()
     if user is None:
         print("User ID not in database")
+        raise credential_exception
+
+    return userOut(id=user.id, username=user.username)
+
+
+async def websocket_current_user(websocket: WebSocket, session: AsyncSession = Depends(get_db)) -> userOut:
+    credential_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    token = websocket.query_params.get("token")
+    if not token:
+        raise credential_exception
+
+    token_data = await verify_access_token(token, credential_exception)
+    stmt = select(User).where(User.id == int(token_data.user_id))
+    result = await session.execute(stmt)
+    user = result.scalars().first()
+    if user is None:
         raise credential_exception
 
     return userOut(id=user.id, username=user.username)

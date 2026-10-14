@@ -2,27 +2,15 @@ import asyncio
 from dataclasses import dataclass, field
 from uuid import uuid4
 import chess
-from app.authentication.authentication import current_user
+from app.authentication.authentication import websocket_current_user
 from app.schemas.schemas import userOut
 from app.game.moves2 import handle_game
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from app.game.models import WaitingPlayer, GameRoom
 
 
 router = APIRouter(prefix="/game", tags=["game"])
 
-@dataclass
-class WaitingPlayer:
-	player_id: str
-	websocket: WebSocket
-	matched: asyncio.Event = field(default_factory=asyncio.Event)
-	room: "GameRoom | None" = None
-
-@dataclass
-class GameRoom:
-	game_id: str
-	players: list[WaitingPlayer] = field(default_factory=list)
-	board: chess.Board = field(default_factory=chess.Board)
-	board_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 class MatchmakingManager:
 	def __init__(self) -> None:
@@ -66,7 +54,7 @@ matchmaking = MatchmakingManager()
 
 
 @router.websocket("/ws")
-async def find_game(websocket: WebSocket, usercred: userOut = Depends(current_user)) -> None:
+async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_current_user)) -> None:
 	await websocket.accept()
 	player, room = await matchmaking.join(websocket, usercred)
 	sends_match_event = room is not None
@@ -91,6 +79,7 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(current_us
 				
 				for task in pending: # cancels task that is not completed
 					task.cancel()
+				await asyncio.gather(*pending, return_exceptions=True)
 
 				if matched_task in done: # #if matched user found, then get the room of the matched user
 					room = player.room 
@@ -106,6 +95,8 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(current_us
 					"game": "chess",
 					"players": [room_player.player_id for room_player in room.players],
 				})
+				room.black_player = room.players[0].player_id
+				room.white_player = room.players[1].player_id
 
 		await handle_game(websocket, player, room)
 	except WebSocketDisconnect:
