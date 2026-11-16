@@ -1,0 +1,16 @@
+User should not be able to use oppoenent's pieces - Done
+The board should flip for black - Done
+request format for websocket - No issue
+promotion not working  - fixed
+active connections after gameend -Checked
+implement castling - works somehwat
+cant move king in front of own pawn - Can't replicate
+selecting upon clicking on pieces - works somewhat
+The Last move dosent seem visible - Fixed
+move tracker should be fixed - Done
+Integrating frontend and backend - Working on
+Add another page between login and game
+
+clean up the UI later
+post checkmate implementation 
+Exit funciton during game

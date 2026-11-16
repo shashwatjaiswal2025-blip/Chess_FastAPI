@@ -53,3 +53,7 @@ async def signup(user_data: usercreate, session: AsyncSession = Depends(get_db))
     await session.refresh(new_user)
     
     return new_user
+
+@router.get('/{user_id}/games'){
+    
+}
