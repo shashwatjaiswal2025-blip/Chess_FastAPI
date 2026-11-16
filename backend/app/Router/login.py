@@ -54,6 +54,13 @@ async def signup(user_data: usercreate, session: AsyncSession = Depends(get_db))
     
     return new_user
 
-@router.get('/{user_id}/games'){
+@router.get('/{user_id}/games')
+async def get_user_games(user_id: int, session: AsyncSession = Depends(get_db)):
+    stmt = select(User).where(User.id == user_id)
+    user = (await session.execute(stmt)).scalar_one_or_none()
     
-}
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Assuming you have a relationship set up in your User model to access games
+    return {"temp":"Need to add game history and review"}
