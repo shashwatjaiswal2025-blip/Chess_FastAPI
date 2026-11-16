@@ -41,29 +41,24 @@ async def handle_game(websocket: WebSocket,player: WaitingPlayer, room: GameRoom
                     })
                     continue
 
+                board_state = room.board.fen()
+                await send_to_players(room, {
+                    "type": "board_state",
+                    "board_state": board_state,
+                    "move": move,
+                })
+
                 if await check_mate(room.board):
                     await send_to_players(room, {
                         "type": "checkmate",
                         "message": "Checkmate! Game over.",
                         "winner": player.player_id,
                     })
-                
                     break
-
                 elif await is_check(room.board):
                     await send_to_players(room, {
                         "type": "check",
                         "message": "Check!",
                     })
 
-
-                board_state = room.board.fen()
-
-            await send_to_players(room, {
-                "type": "board_state",
-                "board_state": board_state,
-            })
-
         
-
-

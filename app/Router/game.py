@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass, field
+from collections import deque
 from uuid import uuid4
 import chess
 from app.authentication.authentication import websocket_current_user
@@ -12,18 +12,27 @@ from app.game.models import WaitingPlayer, GameRoom
 router = APIRouter(prefix="/game", tags=["game"])
 
 
+class DuplicateActivePlayerError(Exception):
+	"""Raised when an account already has an active game websocket."""
+
+
 class MatchmakingManager:
 	def __init__(self) -> None:
-		self.waiting_players: list[WaitingPlayer] = []
+		self.waiting_players: deque[WaitingPlayer] = deque()
 		self.game_rooms: dict[str, GameRoom] = {}
+		self.active_players: dict[str, WaitingPlayer] = {}
 		self.lock = asyncio.Lock()
 
 	async def join(self, websocket: WebSocket, user: userOut) -> tuple[WaitingPlayer, GameRoom | None]:
 		player = WaitingPlayer(player_id=str(user.id), websocket=websocket)
 
 		async with self.lock:#this part of code can run only with one user at a time, due to this lock and line
+			if player.player_id in self.active_players:
+				raise DuplicateActivePlayerError
+
+			self.active_players[player.player_id] = player
 			if self.waiting_players:
-				opponent = self.waiting_players.pop(0)
+				opponent = self.waiting_players.popleft()
                 
 				room = GameRoom(
 					game_id=str(uuid4()),
@@ -31,6 +40,7 @@ class MatchmakingManager:
 				)
 				self.game_rooms[room.game_id] = room
 				opponent.room = room
+				player.room = room
 				opponent.matched.set()
 				return player, room
 
@@ -39,8 +49,12 @@ class MatchmakingManager:
 
 	async def leave(self, player: WaitingPlayer, room: GameRoom | None) -> None:
 		async with self.lock:
-			if player in self.waiting_players:
+			self.active_players.pop(player.player_id, None)
+
+			try:
 				self.waiting_players.remove(player)
+			except ValueError:
+				pass
 
 			if room and room.game_id in self.game_rooms:
 				del self.game_rooms[room.game_id]
@@ -49,14 +63,41 @@ class MatchmakingManager:
 		opponent = next(opponent for opponent in room.players if opponent.player_id != player.player_id)
 		await opponent.websocket.send_json(message)
 
+	async def active_connections(self) -> list[dict[str, str | None]]:
+		async with self.lock:
+			return [
+				{
+					"user_id": player.player_id,
+					"room_id": player.room.game_id if player.room else None,
+				}
+				for player in self.active_players.values()
+			]
+
 
 matchmaking = MatchmakingManager()
+
+
+@router.get("/active-websockets")
+async def get_active_websockets() -> dict[str, list[dict[str, str | None]]]:
+	return {"active_websockets": await matchmaking.active_connections()}
 
 
 @router.websocket("/ws")
 async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_current_user)) -> None:
 	await websocket.accept()
-	player, room = await matchmaking.join(websocket, usercred)
+	player: WaitingPlayer | None = None
+	room: GameRoom | None = None
+
+	try:
+		player, room = await matchmaking.join(websocket, usercred)
+	except DuplicateActivePlayerError:
+		await websocket.send_json({
+			"type": "error",
+			"message": "This account already has an active game.",
+		})
+		await websocket.close(code=1008, reason="Account already has an active game")
+		return
+
 	sends_match_event = room is not None
 
 	try:
@@ -89,17 +130,20 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_
 				
 		if sends_match_event:
 			for room_player in room.players:
+				room.black_player = room.players[0].player_id
+				room.white_player = room.players[1].player_id
 				await room_player.websocket.send_json({
 					"type": "matched",
 					"game_id": room.game_id,
 					"game": "chess",
 					"players": [room_player.player_id for room_player in room.players],
+					"player_color": "black" if room_player.player_id == room.black_player else "white",
 				})
-				room.black_player = room.players[0].player_id
-				room.white_player = room.players[1].player_id
+				
 
 		await handle_game(websocket, player, room)
 	except WebSocketDisconnect:
 		pass
 	finally:
-		await matchmaking.leave(player, room)
+		if player is not None:
+			await matchmaking.leave(player, room)
