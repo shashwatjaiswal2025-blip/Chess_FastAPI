@@ -93,9 +93,9 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_
 	except DuplicateActivePlayerError:
 		await websocket.send_json({
 			"type": "error",
-			"message": "This account already has an active game.",
+			"message": "This account already has an active login.",
 		})
-		await websocket.close(code=1008, reason="Account already has an active game")
+		await websocket.close(code=1008, reason="Account already has an active login.")
 		return
 
 	sends_match_event = room is not None

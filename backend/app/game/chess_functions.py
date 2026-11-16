@@ -1,5 +1,5 @@
 import chess
-from backend.app.database.database import Game, Active_Game
+from backend.app.database.database import Game
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from backend.app.schemas.schemas import game_board

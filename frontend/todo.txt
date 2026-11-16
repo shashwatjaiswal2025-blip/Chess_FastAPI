@@ -10,7 +10,7 @@ The Last move dosent seem visible - Fixed
 move tracker should be fixed - Done
 Integrating frontend and backend - Working on
 Add another page between login and game
-
+add ability to relogin to game if websocket disconnect, or opponent win game at dissconnect
 clean up the UI later
 post checkmate implementation 
 Exit funciton during game

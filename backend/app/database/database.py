@@ -1,11 +1,14 @@
 from datetime import datetime
 from contextlib import asynccontextmanager
 import os
+from time import timezone
 from fastapi import FastAPI
+from sqlalchemy import JSONB, CheckConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import Integer, String, Boolean, DateTime, MetaData, text, func, ForeignKey
 from sqlalchemy.orm import declarative_base, mapped_column, Mapped
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -71,17 +74,19 @@ class Game(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class Active_Game(Base):
-    __tablename__ = "active_games"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    time_left_white: Mapped[int] = mapped_column(Integer, nullable=False)  # Time left for white in seconds
-    time_left_black: Mapped[int] = mapped_column(Integer, nullable=False)  # Time left for black in seconds
-    board_state: Mapped[str] = mapped_column(String, nullable=False)  # FEN string
-    moves: Mapped[str] = mapped_column(String, nullable=False)  # Store moves in PGN format
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_move_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+class Game_History(Base):
+    __tablename__ = "chess_game_history"
+    __table_args__ = (CheckConstraint("jsonb_typeof(moves) = 'array'", name="moves_must_be_array"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    white_player: Mapped[str] = mapped_column(String(100), nullable=False)
+    black_player: Mapped[str] = mapped_column(String(100), nullable=False)
+    moves: Mapped[tuple[str, ...]] = mapped_column(JSONB, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 class waiting_player(Base):
     __tablename__ = "waiting_players"
