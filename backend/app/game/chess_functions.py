@@ -1,8 +1,8 @@
 import chess
-from app.database.database import Game, Active_Game
+from backend.app.database.database import Game, Active_Game
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
-from app.schemas.schemas import game_board
+from backend.app.schemas.schemas import game_board
 
 async def validate_moves(move_uci: str, board: chess.Board, team: bool | None = None) -> chess.Move:
     """Validate a UCI move and return it without changing the board."""

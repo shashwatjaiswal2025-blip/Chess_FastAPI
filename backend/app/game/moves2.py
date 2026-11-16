@@ -1,6 +1,6 @@
-from app.game.chess_functions import make_move,check_mate, is_check
+from backend.app.game.chess_functions import make_move,check_mate, is_check
 from fastapi import HTTPException, WebSocket
-from app.game.models import WaitingPlayer, GameRoom
+from backend.app.game.models import WaitingPlayer, GameRoom
 from fastapi.websockets import WebSocketDisconnect
 
 

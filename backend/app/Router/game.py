@@ -2,11 +2,11 @@ import asyncio
 from collections import deque
 from uuid import uuid4
 import chess
-from app.authentication.authentication import websocket_current_user
-from app.schemas.schemas import userOut
-from app.game.moves2 import handle_game
+from backend.app.authentication.authentication import websocket_current_user
+from backend.app.schemas.schemas import userOut
+from backend.app.game.moves2 import handle_game
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from app.game.models import WaitingPlayer, GameRoom
+from backend.app.game.models import WaitingPlayer, GameRoom
 
 
 router = APIRouter(prefix="/game", tags=["game"])

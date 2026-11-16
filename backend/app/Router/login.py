@@ -4,9 +4,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from passlib.context import CryptContext
-from app.database.database import get_db, User
-from app.schemas.schemas import Token, usercreate, userOut
-from app.authentication.authentication import create_access_token
+from backend.app.database.database import get_db, User
+from backend.app.schemas.schemas import Token, usercreate, userOut
+from backend.app.authentication.authentication import create_access_token
 
 
 
