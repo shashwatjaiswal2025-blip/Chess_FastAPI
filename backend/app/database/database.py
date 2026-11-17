@@ -64,6 +64,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    
+
 class Game(Base):
     __tablename__ = "games"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -81,7 +83,7 @@ class Game_History(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     white_player: Mapped[str] = mapped_column(String(100), nullable=False)
     black_player: Mapped[str] = mapped_column(String(100), nullable=False)
-    moves: Mapped[tuple[str, ...]] = mapped_column(JSONB, nullable=False)
+    moves: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Your Castleline chess dashboard.">
+    <title>Dashboard | Castleline</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dashboard-page">
+    <header class="game-header">
+        <a href="dashboard.html" class="wordmark">castleline <b>/</b> chess</a>
+        <div class="header-actions">
+            <span class="user-chip" data-user-name>Player</span>
+            <button class="logout-button" id="dashboard-logout" type="button">Sign out</button>
+        </div>
+    </header>
+    <main class="dashboard-layout">
+        <section class="dashboard-intro">
+            <p class="eyebrow">YOUR CHESS ROOM</p>
+            <h1>Welcome back,<br><em data-user-name>Player</em>.</h1>
+            <p class="dashboard-copy">Review your latest battles or find a new opponent.</p>
+            <button id="start-game" class="primary-button start-game-button" type="button"><span>Start a game</span><span aria-hidden="true">→</span></button>
+        </section>
+        <section class="history-section">
+            <div class="section-heading"><div><p class="eyebrow">ARCHIVE</p><h2>Past games</h2></div><span class="history-note">Your record</span></div>
+            <div id="game-history" class="game-history" aria-live="polite">
+                <div class="empty-state"><span class="empty-icon">…</span><p>Loading history</p></div>
+            </div>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

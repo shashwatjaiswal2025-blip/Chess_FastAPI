@@ -16,7 +16,9 @@ class WaitingPlayer:
 class GameRoom:
 	game_id: str
 	players: list[WaitingPlayer] = field(default_factory=list)
-	black_player: WaitingPlayer | None = None
-	white_player: WaitingPlayer | None = None
+	black_player: str | None = None
+	white_player: str | None = None
 	board: chess.Board = field(default_factory=chess.Board)
 	board_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+	move_history: list[str] = field(default_factory=list)
+	history_saved: bool = False

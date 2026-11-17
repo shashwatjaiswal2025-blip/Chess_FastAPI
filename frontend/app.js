@@ -40,7 +40,7 @@ function setupAuth() {
                 document.querySelector('[data-auth-mode="login"]').click();
             } else {
                 if (!data.access_token) throw new Error('The server did not return a sign-in token.');
-                setToken(data.access_token); localStorage.setItem('castleline_username', username.value); window.location.href = 'game.html';
+                setToken(data.access_token); localStorage.setItem('castleline_username', username.value); window.location.href = 'dashboard.html';
             }
         } catch (error) { showMessage(message, error instanceof Error ? error.message : 'The server is unavailable.'); } finally { button.disabled = false; button.removeAttribute('aria-busy'); submitLabel.textContent = mode === 'login' ? 'Sign in' : 'Create account'; }
     });
@@ -145,7 +145,7 @@ function showPromotionPicker(board, targetSquare, piece, onChoose) {
 
 function setupGame() {
     if (!document.getElementById('board')) return;
-    const token = getToken(); if (!token) { window.location.href = 'home.html'; return; }
+    const token = getToken(); if (!token) { window.location.href = 'login.html'; return; }
     const state = { fen: initialFen, selected: null, socket: null, moves: [], orientation: 'white' };
     const status = document.getElementById('game-status'); const matchStatus = document.getElementById('match-status'); const toast = document.getElementById('toast');
     document.getElementById('user-name').textContent = localStorage.getItem('castleline_username') || 'Player';
@@ -198,7 +198,7 @@ function setupGame() {
         }
         submitMove(state.selected, square);
     });
-    document.getElementById('logout').addEventListener('click', () => { localStorage.removeItem('castleline_token'); window.location.href = 'home.html'; });
+    document.getElementById('logout').addEventListener('click', () => { localStorage.removeItem('castleline_token'); localStorage.removeItem('castleline_username'); window.location.href = 'login.html'; });
     document.getElementById('new-game').addEventListener('click', () => connect());
     function connect() {
         if (state.socket) state.socket.close(); state.moves = []; renderMoves();
@@ -213,6 +213,7 @@ function setupGame() {
             if (data.type === 'board_state') { state.fen = data.board_state; if (data.move) { state.moves.push([data.move.slice(0, 2), data.move.slice(2, 4) + (data.move.length === 5 ? `=${data.move[4].toUpperCase()}` : '')]); renderMoves(); } renderBoard(state.fen, null, [], state.orientation); }
             if (data.type === 'check') { matchStatus.textContent = 'Check. Find your escape.'; showToast('Check'); }
             if (data.type === 'checkmate') { matchStatus.textContent = 'Game over by checkmate.'; status.textContent = 'Game over'; }
+            if (data.type === 'game_over') { matchStatus.textContent = data.message; status.textContent = 'Game over'; }
             if (data.type === 'error') showToast(data.message);
         };
         state.socket.onerror = () => { status.textContent = 'Offline preview'; matchStatus.textContent = 'API unavailable. Board is ready for preview.'; showToast('Could not reach the game server'); };
@@ -221,4 +222,59 @@ function setupGame() {
     renderBoard(state.fen, null, [], state.orientation); renderMoves(); connect();
 }
 
-setupAuth(); setupGame();
+async function setupDashboard() {
+    const history = document.getElementById('game-history');
+    if (!history) return;
+
+    const token = getToken();
+    if (!token) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    const username = localStorage.getItem('castleline_username') || 'Player';
+    document.querySelectorAll('[data-user-name]').forEach(element => { element.textContent = username; });
+    document.getElementById('start-game').addEventListener('click', () => { window.location.href = 'game.html'; });
+    document.getElementById('dashboard-logout').addEventListener('click', () => {
+        localStorage.removeItem('castleline_token');
+        localStorage.removeItem('castleline_username');
+        window.location.href = 'login.html';
+    });
+
+    try {
+        const response = await fetch(`${API_URL}/games/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Game history is not available yet.');
+        const games = Array.isArray(data) ? data : data.games;
+        if (!Array.isArray(games)) throw new Error('The game history response has an invalid format.');
+        history.replaceChildren();
+        if (!games.length) {
+            history.innerHTML = '<div class="empty-state"><span class="empty-icon">♞</span><p>No games yet</p><span>Start your first game to see it here.</span></div>';
+            return;
+        }
+        games.forEach(game => {
+            const row = document.createElement('article');
+            row.className = 'history-row';
+            const opponent = game.opponent || 'Unknown opponent';
+            const result = game.result || 'Ongoing';
+            const date = game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Date unavailable';
+            const details = document.createElement('div');
+            const opponentElement = document.createElement('strong');
+            const dateElement = document.createElement('span');
+            const resultElement = document.createElement('b');
+            opponentElement.textContent = `vs. ${opponent}`;
+            dateElement.textContent = date;
+            resultElement.textContent = result;
+            resultElement.className = result === 'Win' ? 'result-win' : result === 'Loss' ? 'result-loss' : '';
+            details.append(opponentElement, dateElement);
+            row.append(details, resultElement);
+            history.append(row);
+        });
+    } catch (error) {
+        history.innerHTML = `<div class="empty-state"><span class="empty-icon">!</span><p>History unavailable</p><span>${error instanceof Error ? error.message : 'Unable to load game history.'}</span></div>`;
+    }
+}
+
+setupAuth(); setupGame(); setupDashboard();
