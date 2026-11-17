@@ -5,7 +5,7 @@ from uuid import uuid4
 import chess
 from backend.app.authentication.authentication import websocket_current_user
 from backend.app.schemas.schemas import userOut
-from backend.app.game.moves2 import handle_game
+from backend.app.game.move import handle_game, resign_game
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from backend.app.game.models import WaitingPlayer, GameRoom
 
@@ -156,7 +156,8 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_
 
 		await handle_game(websocket, player, room)
 	except WebSocketDisconnect:
-		pass
+		if player is not None and room is not None:
+			await resign_game(room, player)
 	finally:
 		if player is not None:
 			await matchmaking.leave(player, room)

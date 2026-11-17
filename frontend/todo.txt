@@ -13,9 +13,10 @@ Add another page between login and game - Done
 add database changes to support Game_History - Working on, to be tested
 
 add game history end point - Done
-add API end point to seperate login and dashboard - to be worked on
-Push the game into db at checkmate
-add ability to relogin to game if websocket disconnect, or opponent win game at dissconnect
-clean up the UI later
-post checkmate implementation 
-Exit funciton during game
+add API end point to seperate login and dashboard - Done
+Push the game into db at checkmate - Done
+add ability to relogin to game if websocket disconnect, or opponent win game at dissconnect - Done changed disconnect = resign
+clean up the UI later - Done partially
+post checkmate implementation - Done
+Exit funciton during  -Done
+

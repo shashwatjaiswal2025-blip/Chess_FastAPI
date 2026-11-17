@@ -1,4 +1,5 @@
-const API_URL = localStorage.getItem('castleline_api') || 'http://127.0.0.1:8000';
+const API_URL = localStorage.getItem('castleline_api') ||
+    (window.location.protocol === 'http:' || window.location.protocol === 'https:' ? window.location.origin : 'http://127.0.0.1:8000');
 const pieceMap = { r: '♜', n: '♞', b: '♝', q: '♛', k: '♚', p: '♟', R: '♖', N: '♘', B: '♗', Q: '♕', K: '♔', P: '♙' };
 const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -32,7 +33,9 @@ function setupAuth() {
         submitLabel.textContent = mode === 'login' ? 'Signing in…' : 'Creating account…';
         try {
             const isLogin = mode === 'login';
-            const body = isLogin ? new URLSearchParams({ username: username.value, password: password.value }) : JSON.stringify({ username: username.value, email: email.value, password: password.value });
+            const normalizedUsername = username.value.trim();
+            if (!normalizedUsername) throw new Error('Username cannot be empty.');
+            const body = isLogin ? new URLSearchParams({ username: normalizedUsername, password: password.value }) : JSON.stringify({ username: normalizedUsername, email: email.value, password: password.value });
             const response = await fetch(`${API_URL}/${isLogin ? 'login' : 'signup'}`, { method: 'POST', headers: { 'Content-Type': isLogin ? 'application/x-www-form-urlencoded' : 'application/json' }, body });
             const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.detail || 'Unable to continue.');
             if (!isLogin) {
@@ -40,7 +43,7 @@ function setupAuth() {
                 document.querySelector('[data-auth-mode="login"]').click();
             } else {
                 if (!data.access_token) throw new Error('The server did not return a sign-in token.');
-                setToken(data.access_token); localStorage.setItem('castleline_username', username.value); window.location.href = 'dashboard.html';
+                setToken(data.access_token); localStorage.setItem('castleline_username', normalizedUsername); window.location.href = 'dashboard.html';
             }
         } catch (error) { showMessage(message, error instanceof Error ? error.message : 'The server is unavailable.'); } finally { button.disabled = false; button.removeAttribute('aria-busy'); submitLabel.textContent = mode === 'login' ? 'Sign in' : 'Create account'; }
     });
@@ -290,7 +293,13 @@ function setupGame() {
             if (data.type === 'checkmate') { state.inCheck = true; state.gameOver = true; status.textContent = 'Game over'; updateTurnStatus(); renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck); const winnerColor = state.fen.split(' ')[1] === 'w' ? 'Black' : 'White'; showGameOver('Checkmate', winnerColor === (state.orientation === 'white' ? 'White' : 'Black') ? 'You won' : 'Opponent won'); }
             if (data.type === 'game_over') { state.gameOver = true; status.textContent = 'Game over'; updateTurnStatus(); showGameOver('Game over', 'Draw'); }
             if (data.type === 'resigned') { state.gameOver = true; status.textContent = 'Game over'; updateTurnStatus(); showGameOver('Game over', data.winner_color === state.orientation ? 'You won' : 'You resigned'); }
-            if (data.type === 'error') showToast(data.message);
+            if (data.type === 'error') {
+                if (data.message === 'This account already has an active login.') {
+                    window.location.href = 'dashboard.html';
+                    return;
+                }
+                showToast(data.message);
+            }
         };
         state.socket.onerror = () => { status.textContent = 'Offline preview'; showToast('Could not reach the game server'); };
         state.socket.onclose = () => { if (status.textContent !== 'Game over') status.textContent = 'Disconnected'; };
