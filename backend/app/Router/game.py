@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections import deque
 from uuid import uuid4
 import chess
@@ -24,7 +25,7 @@ class MatchmakingManager:
 		self.lock = asyncio.Lock()
 
 	async def join(self, websocket: WebSocket, user: userOut) -> tuple[WaitingPlayer, GameRoom | None]:
-		player = WaitingPlayer(player_id=str(user.id), websocket=websocket)
+		player = WaitingPlayer(player_id=str(user.id), username=user.username, websocket=websocket)
 
 		async with self.lock:#this part of code can run only with one user at a time, due to this lock and line
 			if player.player_id in self.active_players:
@@ -126,18 +127,30 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_
 					room = player.room 
 					break
 
-				disconnect_task.result() # this raises WebSocketDisconnect if the user disconnected
+				message = disconnect_task.result() # this raises WebSocketDisconnect if the user disconnected
+				try:
+					if isinstance(message, str) and json.loads(message).get("type") == "resign":
+						await websocket.send_json({"type": "resigned"})
+						return
+				except (json.JSONDecodeError, TypeError):
+					pass
 				
 		if sends_match_event:
 			for room_player in room.players:
 				room.black_player = room.players[0].player_id
 				room.white_player = room.players[1].player_id
+				opponent = next(
+					opponent
+					for opponent in room.players
+					if opponent.player_id != room_player.player_id
+				)
 				await room_player.websocket.send_json({
 					"type": "matched",
 					"game_id": room.game_id,
 					"game": "chess",
 					"players": [room_player.player_id for room_player in room.players],
 					"player_color": "black" if room_player.player_id == room.black_player else "white",
+					"opponent_username": opponent.username,
 				})
 				
 

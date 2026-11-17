@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 import os
 from time import timezone
 from fastapi import FastAPI
-from sqlalchemy import JSONB, CheckConstraint
+from sqlalchemy import CheckConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import Integer, String, Boolean, DateTime, MetaData, text, func, ForeignKey
-from sqlalchemy.orm import declarative_base, mapped_column, Mapped
+from sqlalchemy.orm import declarative_base, mapped_column, Mapped, relationship
 from dotenv import load_dotenv
 
 
@@ -58,14 +59,65 @@ async def lifespan(app: FastAPI):
 
 class User(Base):
     __tablename__ = "users"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    
+    white_games: Mapped[list["Game_History"]] = relationship(
+        foreign_keys="Game_History.white_player_id",
+        back_populates="white_player",
+    )
+    black_games: Mapped[list["Game_History"]] = relationship(
+        foreign_keys="Game_History.black_player_id",
+        back_populates="black_player",
+    )
+    # Read-only combined relationship for all games (white or black)
+    games: Mapped[list["Game_History"]] = relationship(
+        primaryjoin=(
+            "or_(User.id == Game_History.white_player_id, "
+            "User.id == Game_History.black_player_id)"
+        ),
+        viewonly=True,
+        order_by="Game_History.recorded_at.desc()",
+    )
 
+
+class Game_History(Base):
+    __tablename__ = "chess_game_history"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(moves) = 'array'", name="moves_must_be_array"),
+        # Optional: prevent a user from playing against themselves
+        CheckConstraint("white_player_id != black_player_id", name="players_must_differ"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    white_player_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    black_player_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    moves: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    white_player: Mapped["User"] = relationship(
+        foreign_keys=[white_player_id],
+        back_populates="white_games",
+    )
+    black_player: Mapped["User"] = relationship(
+        foreign_keys=[black_player_id],
+        back_populates="black_games",
+    )
+ 
 class Game(Base):
     __tablename__ = "games"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -76,19 +128,6 @@ class Game(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class Game_History(Base):
-    __tablename__ = "chess_game_history"
-    __table_args__ = (CheckConstraint("jsonb_typeof(moves) = 'array'", name="moves_must_be_array"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    white_player: Mapped[str] = mapped_column(String(100), nullable=False)
-    black_player: Mapped[str] = mapped_column(String(100), nullable=False)
-    moves: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    recorded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
 
 class waiting_player(Base):
     __tablename__ = "waiting_players"

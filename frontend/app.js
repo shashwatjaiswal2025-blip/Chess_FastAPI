@@ -63,9 +63,27 @@ function pieceAt(fen, square) {
     return null;
 }
 
-function renderBoard(fen, selected = null, legalMoves = [], orientation = 'white') {
+function findKingSquare(fen, color) {
+    const position = fen.split(' ')[0].split('/');
+    const king = color === 'w' ? 'K' : 'k';
+    for (let rowIndex = 0; rowIndex < position.length; rowIndex += 1) {
+        let fileIndex = 0;
+        for (const character of position[rowIndex]) {
+            if (/\d/.test(character)) {
+                fileIndex += Number(character);
+            } else {
+                if (character === king) return String.fromCharCode(97 + fileIndex) + (8 - rowIndex);
+                fileIndex += 1;
+            }
+        }
+    }
+    return null;
+}
+
+function renderBoard(fen, selected = null, legalMoves = [], orientation = 'white', lastMove = null, inCheck = false) {
     const board = document.getElementById('board'); if (!board) return;
     board.innerHTML = '';
+    const checkedKing = inCheck ? findKingSquare(fen, fen.split(' ')[1]) : null;
     const position = fen.split(' ')[0].split('/');
     const rows = orientation === 'black' ? [...Array(8).keys()].reverse() : [...Array(8).keys()];
     const files = orientation === 'black' ? [...Array(8).keys()].reverse() : [...Array(8).keys()];
@@ -86,6 +104,8 @@ function renderBoard(fen, selected = null, legalMoves = [], orientation = 'white
         square.dataset.square = name;
         square.className = `square ${(rowIndex + fileIndex) % 2 ? 'dark' : 'light'}`;
         if (name === selected) square.classList.add('selected');
+        if (lastMove && (name === lastMove.from || name === lastMove.to)) square.classList.add('last-move');
+        if (name === checkedKing) square.classList.add('in-check');
         if (legalMoves.includes(name)) square.classList.add('legal');
         if (pieceValue) {
             const piece = document.createElement('span');
@@ -146,8 +166,41 @@ function showPromotionPicker(board, targetSquare, piece, onChoose) {
 function setupGame() {
     if (!document.getElementById('board')) return;
     const token = getToken(); if (!token) { window.location.href = 'login.html'; return; }
-    const state = { fen: initialFen, selected: null, socket: null, moves: [], orientation: 'white' };
-    const status = document.getElementById('game-status'); const matchStatus = document.getElementById('match-status'); const toast = document.getElementById('toast');
+    const shouldStart = new URLSearchParams(window.location.search).get('start') === '1';
+    const state = { fen: initialFen, selected: null, socket: null, moves: [], lastMove: null, inCheck: false, orientation: 'white', matched: false, gameOver: false };
+    const status = document.getElementById('game-status'); const turnStatus = document.getElementById('turn-status'); const toast = document.getElementById('toast');
+    const exitButton = document.getElementById('exit-game');
+    const opponentName = document.querySelector('.opponent-name');
+    const gameOverOverlay = document.getElementById('game-over-overlay');
+    const gameOverTitle = document.getElementById('game-over-title');
+    const gameOverDetail = document.getElementById('game-over-detail');
+    const showGameOver = (title, detail) => {
+        gameOverTitle.textContent = title;
+        gameOverDetail.textContent = detail;
+        gameOverOverlay.classList.add('show');
+    };
+    const hideGameOver = () => gameOverOverlay.classList.remove('show');
+    const updateTurnStatus = () => {
+        if (!shouldStart) {
+            turnStatus.textContent = 'Start a game to play';
+            turnStatus.className = 'turn-status';
+            return;
+        }
+        if (state.gameOver) {
+            turnStatus.textContent = 'Game over';
+            turnStatus.className = 'turn-status';
+            return;
+        }
+        if (!state.matched) {
+            turnStatus.textContent = 'Waiting for opponent';
+            turnStatus.className = 'turn-status';
+            return;
+        }
+        const activeColor = state.fen.split(' ')[1];
+        const yourTurn = activeColor === state.orientation[0];
+        turnStatus.textContent = yourTurn ? 'Your turn' : "Opponent's turn";
+        turnStatus.className = `turn-status ${yourTurn ? 'your-turn' : 'opponent-turn'}`;
+    };
     document.getElementById('user-name').textContent = localStorage.getItem('castleline_username') || 'Player';
     const showToast = text => { toast.textContent = text; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2400); };
     const renderMoves = () => {
@@ -175,7 +228,7 @@ function setupGame() {
         let move = from + to;
         move += promotion;
         state.socket?.send(JSON.stringify({ type: 'move', move }));
-        state.selected = null; renderBoard(state.fen, null, [], state.orientation);
+        state.selected = null; renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck);
     };
     const board = document.getElementById('board');
     board.addEventListener('click', event => {
@@ -183,12 +236,12 @@ function setupGame() {
         if (!square) return;
         if (!state.selected) {
             state.selected = square;
-            renderBoard(state.fen, square, [], state.orientation);
+            renderBoard(state.fen, square, [], state.orientation, state.lastMove, state.inCheck);
             return;
         }
         if (square === state.selected) {
             state.selected = null;
-            renderBoard(state.fen, null, [], state.orientation);
+            renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck);
             return;
         }
         const piece = pieceAt(state.fen, state.selected);
@@ -199,27 +252,51 @@ function setupGame() {
         submitMove(state.selected, square);
     });
     document.getElementById('logout').addEventListener('click', () => { localStorage.removeItem('castleline_token'); localStorage.removeItem('castleline_username'); window.location.href = 'login.html'; });
-    document.getElementById('new-game').addEventListener('click', () => connect());
+    exitButton.addEventListener('click', () => {
+        if (state.socket?.readyState === WebSocket.OPEN && !state.gameOver) {
+            state.socket.send(JSON.stringify({ type: 'resign' }));
+        }
+        window.location.href = 'dashboard.html';
+    });
+    document.getElementById('new-game').addEventListener('click', () => {
+        state.fen = initialFen;
+        state.selected = null;
+        state.moves = [];
+        state.orientation = 'white';
+        state.matched = false;
+        opponentName.textContent = 'Searching...';
+        state.lastMove = null;
+        state.inCheck = false;
+        state.gameOver = false;
+        hideGameOver();
+        document.querySelector('.promotion-picker')?.remove();
+        renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck);
+        renderMoves();
+        updateTurnStatus();
+        connect();
+    });
     function connect() {
         if (state.socket) state.socket.close(); state.moves = []; renderMoves();
         const protocol = API_URL.startsWith('https') ? 'wss' : 'ws'; const host = API_URL.replace(/^https?:\/\//, '');
-        state.socket = new WebSocket(`${protocol}://${host}/game/ws?token=${encodeURIComponent(token)}`); status.textContent = 'Connecting'; matchStatus.textContent = 'Looking for an opponent...';
+        state.socket = new WebSocket(`${protocol}://${host}/game/ws?token=${encodeURIComponent(token)}`); status.textContent = 'Connecting'; updateTurnStatus();
         state.socket.onopen = () => { status.textContent = 'Searching'; showToast('Finding a worthy opponent'); };
         state.socket.onmessage = event => {
             let data;
             try { data = JSON.parse(event.data); } catch { showToast('Received an invalid server response'); return; }
-            if (data.type === 'waiting') { status.textContent = 'Waiting'; matchStatus.textContent = data.message; }
-            if (data.type === 'matched') { state.orientation = data.player_color === 'black' ? 'black' : 'white'; status.textContent = 'Live'; matchStatus.textContent = 'Opponent found. Your move.'; renderBoard(state.fen, null, [], state.orientation); showToast('Match found'); }
-            if (data.type === 'board_state') { state.fen = data.board_state; if (data.move) { state.moves.push([data.move.slice(0, 2), data.move.slice(2, 4) + (data.move.length === 5 ? `=${data.move[4].toUpperCase()}` : '')]); renderMoves(); } renderBoard(state.fen, null, [], state.orientation); }
-            if (data.type === 'check') { matchStatus.textContent = 'Check. Find your escape.'; showToast('Check'); }
-            if (data.type === 'checkmate') { matchStatus.textContent = 'Game over by checkmate.'; status.textContent = 'Game over'; }
-            if (data.type === 'game_over') { matchStatus.textContent = data.message; status.textContent = 'Game over'; }
+            if (data.type === 'waiting') status.textContent = 'Waiting';
+            if (data.type === 'matched') { state.orientation = data.player_color === 'black' ? 'black' : 'white'; opponentName.textContent = data.opponent_username; state.matched = true; status.textContent = 'Live'; updateTurnStatus(); renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck); showToast('Match found'); }
+            if (data.type === 'board_state') { state.fen = data.board_state; state.inCheck = false; if (data.move) { state.lastMove = { from: data.move.slice(0, 2), to: data.move.slice(2, 4) }; state.moves.push([data.move.slice(0, 2), data.move.slice(2, 4) + (data.move.length === 5 ? `=${data.move[4].toUpperCase()}` : '')]); renderMoves(); } updateTurnStatus(); renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck); }
+            if (data.type === 'check') { state.inCheck = true; renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck); showToast('Check'); }
+            if (data.type === 'checkmate') { state.inCheck = true; state.gameOver = true; status.textContent = 'Game over'; updateTurnStatus(); renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck); const winnerColor = state.fen.split(' ')[1] === 'w' ? 'Black' : 'White'; showGameOver('Checkmate', winnerColor === (state.orientation === 'white' ? 'White' : 'Black') ? 'You won' : 'Opponent won'); }
+            if (data.type === 'game_over') { state.gameOver = true; status.textContent = 'Game over'; updateTurnStatus(); showGameOver('Game over', 'Draw'); }
+            if (data.type === 'resigned') { state.gameOver = true; status.textContent = 'Game over'; updateTurnStatus(); showGameOver('Game over', data.winner_color === state.orientation ? 'You won' : 'You resigned'); }
             if (data.type === 'error') showToast(data.message);
         };
-        state.socket.onerror = () => { status.textContent = 'Offline preview'; matchStatus.textContent = 'API unavailable. Board is ready for preview.'; showToast('Could not reach the game server'); };
-        state.socket.onclose = () => { if (status.textContent !== 'Game over') { status.textContent = 'Disconnected'; matchStatus.textContent = 'Connection closed. Find a new game to reconnect.'; } };
+        state.socket.onerror = () => { status.textContent = 'Offline preview'; showToast('Could not reach the game server'); };
+        state.socket.onclose = () => { if (status.textContent !== 'Game over') status.textContent = 'Disconnected'; };
     }
-    renderBoard(state.fen, null, [], state.orientation); renderMoves(); connect();
+    renderBoard(state.fen, null, [], state.orientation, state.lastMove, state.inCheck); renderMoves(); updateTurnStatus();
+    if (shouldStart) connect();
 }
 
 async function setupDashboard() {
@@ -234,7 +311,7 @@ async function setupDashboard() {
 
     const username = localStorage.getItem('castleline_username') || 'Player';
     document.querySelectorAll('[data-user-name]').forEach(element => { element.textContent = username; });
-    document.getElementById('start-game').addEventListener('click', () => { window.location.href = 'game.html'; });
+    document.getElementById('start-game').addEventListener('click', () => { window.location.href = 'game.html?start=1'; });
     document.getElementById('dashboard-logout').addEventListener('click', () => {
         localStorage.removeItem('castleline_token');
         localStorage.removeItem('castleline_username');

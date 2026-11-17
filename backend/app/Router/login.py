@@ -1,18 +1,39 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Response
 from fastapi.security import OAuth2PasswordRequestForm
+import chess
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from passlib.context import CryptContext
-from backend.app.database.database import get_db, User
+from backend.app.database.database import Game_History, get_db, User
 from backend.app.schemas.schemas import Token, usercreate, userOut
-from backend.app.authentication.authentication import create_access_token
+from backend.app.authentication.authentication import create_access_token, current_user
 
 
 
 
 router = APIRouter(prefix='', tags=["Authentication"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _game_result(game: Game_History, player_id: int) -> str:
+    if game.moves and game.moves[-1].startswith("resign:"):
+        resigned_player_id = int(game.moves[-1].split(":", 1)[1])
+        return "Loss" if resigned_player_id == player_id else "Win"
+
+    board = chess.Board()
+    for move in game.moves:
+        board.push_uci(move)
+
+    if not board.is_checkmate():
+        return "Draw"
+
+    winner_id = (
+        game.white_player_id
+        if board.turn == chess.BLACK
+        else game.black_player_id
+    )
+    return "Win" if winner_id == player_id else "Loss"
 
 @router.post('/login', response_model=Token)
 async def login(user_cred: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(get_db)):
@@ -54,6 +75,42 @@ async def signup(user_data: usercreate, session: AsyncSession = Depends(get_db))
     
     return new_user
 
+@router.get('/games/me')
+async def get_current_user_games(
+    user: userOut = Depends(current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Game_History)
+        .options(
+            joinedload(Game_History.white_player),
+            joinedload(Game_History.black_player),
+        )
+        .where(
+            or_(
+                Game_History.white_player_id == user.id,
+                Game_History.black_player_id == user.id,
+            )
+        )
+        .order_by(Game_History.recorded_at.desc())
+    )
+    history_games = (await session.execute(stmt)).scalars().all()
+
+    return [
+        {
+            "id": game.id,
+            "opponent": (
+                game.black_player.username
+                if game.white_player_id == user.id
+                else game.white_player.username
+            ),
+            "result": _game_result(game, user.id),
+            "created_at": game.recorded_at,
+        }
+        for game in history_games
+    ]
+
+
 @router.get('/{user_id}/games')
 async def get_user_games(user_id: int, session: AsyncSession = Depends(get_db)):
     stmt = select(User).where(User.id == user_id)
@@ -61,6 +118,22 @@ async def get_user_games(user_id: int, session: AsyncSession = Depends(get_db)):
     
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    stmt = (
+        select(Game_History)
+        .options(
+            joinedload(Game_History.white_player),
+            joinedload(Game_History.black_player),
+        )
+        .where(
+            or_(
+                Game_History.white_player_id == user_id,
+                Game_History.black_player_id == user_id,
+            )
+        )
+        .order_by(Game_History.recorded_at.desc())
+    )
+
+    history_games = (await session.execute(stmt)).scalars().all()
     
-    # Assuming you have a relationship set up in your User model to access games
-    return {"temp":"Need to add game history and review"}
+    return history_games

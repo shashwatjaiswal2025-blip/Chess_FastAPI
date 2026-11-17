@@ -20,8 +20,8 @@ async def save_game_history(room: GameRoom) -> None:
         raise RuntimeError("Cannot save game history before both players are assigned.")
 
     history = Game_History(
-        white_player=room.white_player,
-        black_player=room.black_player,
+        white_player_id=int(room.white_player),
+        black_player_id=int(room.black_player),
         moves=list(room.move_history),
     )
     async with SessionLocal() as session:
@@ -33,6 +33,25 @@ async def save_game_history(room: GameRoom) -> None:
 async def handle_game(websocket: WebSocket,player: WaitingPlayer, room: GameRoom) -> None:
     while True:
         message = await websocket.receive_json()
+        if message.get("type") == "resign":
+            async with room.board_lock:
+                if room.history_saved:
+                    return
+                winner_player = next(
+                    opponent
+                    for opponent in room.players
+                    if opponent.player_id != player.player_id
+                )
+                room.move_history.append(f"resign:{player.player_id}")
+                await save_game_history(room)
+                await send_to_players(room, {
+                    "type": "resigned",
+                    "player": player.player_id,
+                    "winner": winner_player.player_id,
+                    "winner_color": "white" if winner_player.player_id == room.white_player else "black",
+                })
+            return
+
         if message["type"] == "move":
             move = message.get("move")
             if not isinstance(move, str):
@@ -60,6 +79,11 @@ async def handle_game(websocket: WebSocket,player: WaitingPlayer, room: GameRoom
                     continue
 
                 room.move_history.append(move)
+                game_over = room.board.is_game_over()
+                checkmate = await check_mate(room.board) if game_over else False
+                if game_over:
+                    await save_game_history(room)
+
                 board_state = room.board.fen()
                 await send_to_players(room, {
                     "type": "board_state",
@@ -67,9 +91,8 @@ async def handle_game(websocket: WebSocket,player: WaitingPlayer, room: GameRoom
                     "move": move,
                 })
 
-                if room.board.is_game_over():
-                    await save_game_history(room)
-                    if await check_mate(room.board):
+                if game_over:
+                    if checkmate:
                         await send_to_players(room, {
                             "type": "checkmate",
                             "message": "Checkmate! Game over.",

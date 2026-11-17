@@ -8,6 +8,7 @@ from fastapi import WebSocket
 @dataclass
 class WaitingPlayer:
 	player_id: str
+	username: str
 	websocket: WebSocket
 	matched: asyncio.Event = field(default_factory=asyncio.Event)
 	room: "GameRoom | None" = None

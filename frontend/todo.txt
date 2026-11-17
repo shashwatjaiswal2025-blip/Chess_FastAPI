@@ -8,8 +8,13 @@ cant move king in front of own pawn - Can't replicate
 selecting upon clicking on pieces - works somewhat
 The Last move dosent seem visible - Fixed
 move tracker should be fixed - Done
-Integrating frontend and backend - Working on
-Add another page between login and game
+Integrating frontend and backend - Done
+Add another page between login and game - Done
+add database changes to support Game_History - Working on, to be tested
+
+add game history end point - Done
+add API end point to seperate login and dashboard - to be worked on
+Push the game into db at checkmate
 add ability to relogin to game if websocket disconnect, or opponent win game at dissconnect
 clean up the UI later
 post checkmate implementation 
