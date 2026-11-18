@@ -23,3 +23,4 @@ class GameRoom:
 	board_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 	move_history: list[str] = field(default_factory=list)
 	history_saved: bool = False
+	match_event_sent: bool = False

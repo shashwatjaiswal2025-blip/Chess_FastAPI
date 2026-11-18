@@ -64,6 +64,33 @@ class MatchmakingManager:
 		opponent = next(opponent for opponent in room.players if opponent.player_id != player.player_id)
 		await opponent.websocket.send_json(message)
 
+	async def send_match_event(self, room: GameRoom) -> None:
+		async with self.lock:
+			if room.match_event_sent:
+				return
+
+			room.black_player = room.players[0].player_id
+			room.white_player = room.players[1].player_id
+			for room_player in room.players:
+				opponent = next(
+					opponent
+					for opponent in room.players
+					if opponent.player_id != room_player.player_id
+				)
+				await room_player.websocket.send_json({
+					"type": "matched",
+					"game_id": room.game_id,
+					"game": "chess",
+					"players": [room_player.player_id for room_player in room.players],
+					"player_color": (
+						"black"
+						if room_player.player_id == room.black_player
+						else "white"
+					),
+					"opponent_username": opponent.username,
+				})
+			room.match_event_sent = True
+
 	async def active_connections(self) -> list[dict[str, str | None]]:
 		async with self.lock:
 			return [
@@ -99,8 +126,6 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_
 		await websocket.close(code=1008, reason="Account already has an active login.")
 		return
 
-	sends_match_event = room is not None
-
 	try:
 		if room is None:
 			await websocket.send_json({
@@ -135,24 +160,8 @@ async def find_game(websocket: WebSocket, usercred: userOut = Depends(websocket_
 				except (json.JSONDecodeError, TypeError):
 					pass
 				
-		if sends_match_event:
-			for room_player in room.players:
-				room.black_player = room.players[0].player_id
-				room.white_player = room.players[1].player_id
-				opponent = next(
-					opponent
-					for opponent in room.players
-					if opponent.player_id != room_player.player_id
-				)
-				await room_player.websocket.send_json({
-					"type": "matched",
-					"game_id": room.game_id,
-					"game": "chess",
-					"players": [room_player.player_id for room_player in room.players],
-					"player_color": "black" if room_player.player_id == room.black_player else "white",
-					"opponent_username": opponent.username,
-				})
-				
+		if room is not None:
+			await matchmaking.send_match_event(room)
 
 		await handle_game(websocket, player, room)
 	except WebSocketDisconnect:
