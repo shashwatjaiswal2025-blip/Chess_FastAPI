@@ -1,0 +1,21 @@
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+node_modules/
+backend.zip
+
+performance/
+backend/.gitignore/
+
+# Local/generated files
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
