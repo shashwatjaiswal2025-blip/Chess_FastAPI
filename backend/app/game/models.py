@@ -1,0 +1,25 @@
+import asyncio
+import chess
+from dataclasses import dataclass, field
+from fastapi import WebSocket
+
+
+
+@dataclass
+class WaitingPlayer:
+	player_id: str
+	username: str
+	websocket: WebSocket
+	matched: asyncio.Event = field(default_factory=asyncio.Event)
+	room: "GameRoom | None" = None
+
+@dataclass
+class GameRoom:
+	game_id: str
+	players: list[WaitingPlayer] = field(default_factory=list)
+	black_player: str | None = None
+	white_player: str | None = None
+	board: chess.Board = field(default_factory=chess.Board)
+	board_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+	move_history: list[str] = field(default_factory=list)
+	history_saved: bool = False
